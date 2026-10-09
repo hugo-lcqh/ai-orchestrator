@@ -1,4 +1,4 @@
-# Bộ điều phối AI: Claude quản lý × Codex làm việc × Nimbalyst
+# Bộ điều phối AI: Claude quản lý × Codex làm việc
 
 `orch` là một công cụ dòng lệnh nhỏ viết bằng Python, chỉ dùng thư viện chuẩn, không cần cài thêm gì.
 
@@ -27,13 +27,13 @@
 ## Sơ đồ hoạt động
 
 ```
-Bạn ─► Claude (quản lý) trong Nimbalyst / Claude Code / Claude desktop
+Bạn ─► Claude (quản lý) trong Claude Code / Claude desktop
          │ orch new: kiểm tra yêu cầu → phân loại rủi ro → chống giao trùng
          ▼
   ~/.ai-orchestrator/state.db: danh sách việc + nhật ký mọi lần đổi trạng thái
          │ orch run: khoá theo dự án → gọi codex exec (sandbox, chỉ ghi trong repo)
          ▼
-  Codex (bản đi kèm Nimbalyst, dùng cấu hình ~/.codex và chính sách AGENTS.md)
+  Codex CLI (dùng cấu hình ~/.codex và chính sách AGENTS.md)
          │ trả về JSON theo đúng mẫu + số token đã dùng
          ▼
   Cổng kiểm tra chất lượng:
@@ -55,7 +55,7 @@ orch doctor
 
 Kết quả tốt sẽ có các dòng `codex login: Logged in…`, `policy block … yes` và `manager skill: yes`.
 
-Từ giờ, khi bạn mở **bất kỳ session Claude mới nào** (Nimbalyst, Claude Code CLI hay Claude desktop), Claude tự biết phải giao việc code cho Codex qua `orch`. Bạn không cần làm gì thêm.
+Từ giờ, khi bạn mở **bất kỳ session Claude mới nào** (Claude Code CLI hay Claude desktop), Claude tự biết phải giao việc code cho Codex qua `orch`. Bạn không cần làm gì thêm.
 
 Muốn Claude tự làm trực tiếp cho một việc nào đó, chỉ cần nói rõ, ví dụ: *"lần này bạn tự sửa, đừng dùng orch"*.
 
@@ -138,7 +138,7 @@ orch wait <mã-việc>
 
 Các việc liên quan production, deploy, migration, mật khẩu, quyền truy cập, thanh toán, xoá dữ liệu… sẽ dừng ở trạng thái `AWAITING_USER_APPROVAL`.
 
-Bạn mở **Terminal** (hoặc terminal trong Nimbalyst) và chạy:
+Bạn mở **Terminal** và chạy:
 
 ```bash
 orch approve <mã-việc>
@@ -216,19 +216,6 @@ Trong thư mục đó có:
 orch --path /đường/dẫn/tới/repo status
 ```
 
-### Cho Codex chạy thành session hiển thị trong Nimbalyst (tuỳ chọn)
-
-Mặc định `orch run` chạy Codex ngầm, nên việc **không hiện** trong danh sách session của Nimbalyst. Muốn thấy Codex làm việc ngay trong Nimbalyst, Claude (đang chạy trong Nimbalyst) làm như sau:
-
-1. Chạy `orch brief <mã-việc>` để lấy đoạn yêu cầu cho Codex.
-2. Gọi `spawn_session` với đoạn đó, `model: "openai-codex:gpt-6.1-sol"` và `notifyOnComplete: true`.
-3. Khi Codex xong, lấy JSON kết quả bằng `get_session_result`, rồi đưa vào:
-   ```bash
-   orch collect <mã-việc> --result -
-   ```
-
-Lưu ý: luồng này đã test bằng dữ liệu giả lập, **chưa thử thật** từ bên trong Nimbalyst.
-
 ## Các trạng thái của một việc
 
 Luồng bình thường:
@@ -275,7 +262,7 @@ Hai nơi cấu hình, dùng chung các khoá như nhau:
 | Khoá | Mặc định | Ý nghĩa |
 |---|---|---|
 | `enabled` | `true` | `false` thì tắt điều phối, Claude tự làm trực tiếp |
-| `codex_bin` | `"auto"` | dùng Codex của Nimbalyst trước, không có thì dùng `codex` trong PATH |
+| `codex_bin` | `"auto"` | dùng `codex` trong PATH; đặt đường dẫn tuyệt đối để ghim một bản cụ thể |
 | `codex_model` | `null` | `null` thì dùng model trong `~/.codex/config.toml` |
 | `codex_effort` | `{"low":"medium","medium":"high","high":"xhigh"}` | mức suy luận theo rủi ro, để việc nhỏ không chạy ở mức `ultra` tốn kém |
 | `timeout_sec` | `1800` | thời gian tối đa cho mỗi lần Codex chạy |
@@ -311,8 +298,8 @@ python3 orch.py install
 - chép `orch` vào `~/.ai-orchestrator/bin/` và tạo lệnh tắt `~/.local/bin/orch`;
 - tạo `config.json` nếu chưa có;
 - cài skill `~/.claude/skills/orchestrate/` (chính sách đầy đủ cho Claude);
-- thêm khối ngắn vào `~/.claude/CLAUDE.md`, có hiệu lực cho Nimbalyst, Claude Code CLI và Claude desktop;
-- thêm khối chính sách vào `~/.codex/AGENTS.md`, có hiệu lực cho mọi session Codex, kể cả trong Nimbalyst.
+- thêm khối ngắn vào `~/.claude/CLAUDE.md`, có hiệu lực cho Claude Code CLI và Claude desktop;
+- thêm khối chính sách vào `~/.codex/AGENTS.md`, có hiệu lực cho mọi session Codex.
 
 ## Đo token
 
@@ -337,8 +324,6 @@ Cộng thêm token phía Claude từ transcript của một session Claude Code:
 orch metrics --claude-transcript ~/.claude/projects/<dự-án>/<session>.jsonl
 ```
 
-Transcript của Claude chạy trong Nimbalyst nằm trong cơ sở dữ liệu nội bộ của Nimbalyst nên không đọc được.
-
 **Kết quả đo thực tế (2026-10-09),** với một lỗi sửa 1 dòng:
 
 | | Có điều phối | Claude tự làm |
@@ -353,15 +338,9 @@ Với việc **rất nhỏ**, điều phối **tốn hơn** chứ không tiết 
 
 | Hạng mục | Tình trạng |
 |---|---|
-| Nimbalyst 0.79.1 có sẵn Codex 0.159.2 và Claude | Đã xác minh |
-| Bộ công cụ session của Nimbalyst (`spawn_session`, `send_prompt`, `get_session_result`…) | Đã xác minh, nhưng **chỉ Claude chạy bên trong Nimbalyst** mới gọi được |
-| Claude trong Nimbalyst đọc `~/.claude` (CLAUDE.md, skills) | Đã xác minh qua mã nguồn ứng dụng |
-| Codex trong Nimbalyst đọc `~/.codex` (config, AGENTS.md) | Đã xác minh qua mã nguồn ứng dụng |
 | `codex exec` (JSON, ép mẫu kết quả, tiếp tục thread) | Đã xác minh bằng chạy thật |
-| Codex cài qua Homebrew (0.155.0) với model `gpt-6.1-sol` | **Không chạy được** (lỗi 400). Vì vậy `orch` dùng Codex của Nimbalyst. |
+| Codex cài qua Homebrew (0.155.0) với model `gpt-6.1-sol` | **Không chạy được** (lỗi 400). Cần Codex bản mới hơn. |
 | `codex exec` khi stdin chưa đóng | Bị treo. `orch` đã xử lý bằng cách đóng stdin. |
-| Cổng nội bộ 3456 của Nimbalyst | **Không dùng**, vì không được công bố |
-| Sửa trực tiếp cơ chế định tuyến bên trong Nimbalyst | Không làm (cần bật Extension Dev Tools trong app) |
 
 ## Kiểm thử
 
@@ -371,7 +350,7 @@ Chạy bộ test (khoảng 25 giây, dùng Codex giả lập, không tốn token
 python3 test_orch.py
 ```
 
-Bộ test có 20 bài, bao gồm:
+Bộ test bao gồm:
 
 - tự hoàn tất với việc rủi ro thấp;
 - review và vòng sửa;
@@ -386,7 +365,6 @@ Bộ test có 20 bài, bao gồm:
 - chống giao trùng;
 - phục hồi khi session chết;
 - huỷ việc;
-- luồng Nimbalyst;
 - công tắc tắt;
 - tiếp tục từ checkpoint;
 - không ghi đè tài liệu có sẵn;
@@ -401,7 +379,6 @@ ORCH_REAL=1 python3 test_orch.py RealCodex
 
 ## Giới hạn hiện tại
 
-- `orch run` chạy Codex ngầm, nên việc **không hiện** thành session trong Nimbalyst. Luồng `brief`/`collect` thì hiện được, nhưng chưa thử thật.
 - Nguyên tắc "giao cho Codex trước" dựa vào chính sách trong CLAUDE.md và skill. Những phần **không thể lách** được:
   - bạn phải tự duyệt ở terminal;
   - mức rủi ro không hạ được;
@@ -412,4 +389,4 @@ ORCH_REAL=1 python3 test_orch.py RealCodex
 - Phân loại rủi ro dựa trên từ khoá và phạm vi, có thể bỏ sót. Claude có thể nâng mức rủi ro khi cần.
 - Mỗi repo chỉ chạy một việc tại một thời điểm. Muốn chạy song song, dùng `git worktree`; mỗi worktree được tính là một dự án riêng.
 - `orch` **không bao giờ commit hay push**. Việc commit vẫn do bạn quyết định.
-- Khối chính sách trong `~/.claude/CLAUDE.md` áp dụng cho **mọi** session Claude Code (CLI, desktop, Nimbalyst), không chỉ Nimbalyst.
+- Khối chính sách trong `~/.claude/CLAUDE.md` áp dụng cho **mọi** session Claude Code (CLI và desktop).

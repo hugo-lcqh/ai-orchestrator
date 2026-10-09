@@ -11,15 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path(os.environ.get('ORCH_HOME') or Path.home() / '.ai-orchestrator')
-NIMBALYST_CODEX = ('/Applications/Nimbalyst.app/Contents/Resources/app.asar.unpacked/node_modules/'
-                   '@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex')
 OWNED = '<!-- ai-orchestrator -->'               # memory files orch may rewrite
 SKELETON = '<!-- ai-orchestrator:skeleton -->'   # worker replaces these on the first run
 BEGIN, END = '<!-- ai-orchestrator:begin -->', '<!-- ai-orchestrator:end -->'
 
 DEFAULTS = {
     'enabled': True,
-    'codex_bin': 'auto',            # auto = Nimbalyst's bundled codex (same build Nimbalyst workers use), else PATH
+    'codex_bin': 'auto',            # auto = `codex` on PATH; set an absolute path to pin one build
     'codex_model': None,            # None = ~/.codex/config.toml default
     'codex_effort': {'low': 'medium', 'medium': 'high', 'high': 'xhigh'},
     'timeout_sec': 1800, 'test_timeout_sec': 600,
@@ -405,7 +403,7 @@ def route(risk, approval):
 def codex_bin(cfg):
     if cfg['codex_bin'] != 'auto':
         return cfg['codex_bin'] if os.access(cfg['codex_bin'], os.X_OK) else None
-    return NIMBALYST_CODEX if os.access(NIMBALYST_CODEX, os.X_OK) else shutil.which('codex')
+    return shutil.which('codex')
 
 
 def full_prompt(c, t, p, cfg):
@@ -794,7 +792,7 @@ def approve(tid, path='.', tty=None):
             tty = open('/dev/tty', 'r+')
         except OSError:
             raise Err(f'approval needs a human at a real terminal: run `orch approve {tid}` in Terminal '
-                      "(or Nimbalyst's terminal). Agents cannot approve.")
+                      "(or any terminal you control). Agents cannot approve.")
     tty.write(report(c, t, p, cfg) + f'\n\nType the task id ({tid}) to approve it, anything else to abort: ')
     tty.flush()
     if tty.readline().strip() != tid:
@@ -879,33 +877,6 @@ def cmd_log(a):
         print(f"{r['ts']}  {r['actor']:<22} {str(r['prev']):<22} -> {r['new']:<22} {short(r['reason'], 140)}")
 
 
-def cmd_brief(a):
-    """Hand a task to a worker session you manage yourself (e.g. Nimbalyst spawn_session with an openai-codex model)."""
-    c = db()
-    t, p, cfg = task_here(c, a.task, a.path)
-    with tx(c):
-        t = get(c, t['id'])
-        prompt, survey = prompt_for(c, t, p, cfg, has_thread=bool(t['pending_prompt']))
-        claim(c, t, p, 'external', 'brief handed to an external worker session' + (' + first-run survey' if survey else ''), None)
-    print(prompt + '\nYour final message must be ONLY this JSON object (JSON Schema):\n' + json.dumps(RESULT_SCHEMA))
-
-
-def cmd_collect(a):
-    c = db()
-    t, p, cfg = task_here(c, a.task, a.path)
-    raw = sys.stdin.read() if a.result == '-' else Path(a.result).read_text()
-    task_dir(t).mkdir(parents=True, exist_ok=True)
-    (task_dir(t) / 'result.json').write_text(raw)
-    with tx(c):
-        t = get(c, t['id'])
-        if t['state'] != 'RUNNING':
-            raise Err(f"{t['id']} is {t['state']}; collect needs a RUNNING task handed out with `orch brief`")
-        t = move(c, t, 'VALIDATING', 'external', 'external worker result collected')
-    t = gate(c, t, p, cfg, raw)
-    sync_memory(c, p, cfg)
-    print(report(c, t, p, cfg))
-
-
 def cmd_metrics(a):
     c = db()
     if a.all:
@@ -954,14 +925,12 @@ def cmd_doctor(a):
     if b:
         v = subprocess.run([b, '--version'], capture_output=True, text=True).stdout.strip()
         login = subprocess.run([b, 'login', 'status'], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        print(f"codex worker: {b} ({v}){' [Nimbalyst bundled]' if b == NIMBALYST_CODEX else ''}")
+        print(f"codex worker: {b} ({v})")
         print(f"codex login: {(login.stdout + login.stderr).strip().splitlines()[0] if (login.stdout + login.stderr).strip() else '?'}")
         ok = login.returncode == 0
     else:
-        print('codex worker: NOT FOUND (install Nimbalyst or `brew install codex`)')
+        print('codex worker: NOT FOUND (install Codex: `npm install -g @openai/codex` or `brew install codex`)')
         ok = False
-    nb = subprocess.run(['pgrep', '-f', 'Nimbalyst.app/Contents/MacOS/Nimbalyst'], capture_output=True).returncode == 0
-    print(f"nimbalyst: {'running' if nb else 'not running'}")
     for f in [Path.home() / '.claude/CLAUDE.md', Path.home() / '.codex/AGENTS.md']:
         print(f"policy block in {f}: {'yes' if f.exists() and BEGIN in f.read_text() else 'no'}")
     print(f"manager skill: {'yes' if (Path.home() / '.claude/skills/orchestrate/SKILL.md').exists() else 'no'}")
@@ -1059,9 +1028,6 @@ def main(argv=None):
     s.add_argument('--all', action='store_true', help='all projects')
     sp('report', cmd_status, 'compressed report of one task').add_argument('task')
     sp('log', cmd_log, 'audit trail of state transitions').add_argument('task')
-    sp('brief', cmd_brief, 'print the worker prompt for an external session and mark RUNNING').add_argument('task')
-    k = sp('collect', cmd_collect, 'ingest an external worker result JSON'); k.add_argument('task')
-    k.add_argument('--result', required=True, help='file, or - for stdin')
     m = sp('metrics', cmd_metrics, 'usage and quality metrics'); m.add_argument('--all', action='store_true')
     m.add_argument('--claude-transcript', help='Claude Code JSONL transcript to sum Claude token usage from')
     sp('doctor', cmd_doctor, 'check worker availability and global policy install')

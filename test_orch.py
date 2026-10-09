@@ -266,23 +266,6 @@ class Workflow(Base):
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
 
-    def test_external_worker_path(self):
-        tid = self.new('fix add', scope=())                                 # medium: no scope
-        out = self.orch('brief', tid).stdout
-        self.assertIn('Codex technical worker', out)
-        self.assertEqual(self.row(tid)['state'], 'RUNNING')
-        self.orch('collect', tid, '--result', '-', input='garbage')
-        self.assertEqual(self.row(tid)['state'], 'RETRY_PENDING')
-        self.assertTrue(self.orch('brief', tid).stdout.startswith('REPAIR ROUND 1'))
-        (self.repo / 'm.py').write_text('def add(a, b):\n    return a + b\n')
-        res = {'task_id': tid, 'status': 'completed', 'summary': 's', 'changed_files': ['m.py'], 'evidence_refs': [],
-               'tests': [{'command': TEST, 'status': 'passed', 'detail': ''}], 'risks': [], 'requires_decision': False,
-               'next_action': ''}
-        self.orch('collect', tid, '--result', '-', input='```json\n' + json.dumps(res) + '\n```')
-        r = self.row(tid)
-        self.assertEqual(r['state'], 'REVIEW_PENDING')
-        self.assertEqual(json.loads(r['verify'])['tests'][0]['status'], 'passed')
-
     def test_disabled_switch(self):
         self.config(enabled=False)
         self.assertIn('disabled', self.orch('new', '--objective', 'x', ok=False).stderr)
